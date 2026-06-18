@@ -1,0 +1,10 @@
+# Ignore generated pipeline outputs
+results/**/*
+!results/**/.gitkeep
+!results/smoke/summary.md
+
+figures/**/*
+!figures/**/.gitkeep
+
+# MATLAB autosave
+*.asv
