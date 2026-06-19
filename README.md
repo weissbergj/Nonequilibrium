@@ -1,8 +1,14 @@
 # Nonequilibrium enzyme pipeline
 
-Staged, reproducible MATLAB pipeline for studying KL divergence between stochastic output distributions at two nearby enzyme input states (E0, E1), versus deterministic energy dissipation (phi) and chemical driving (delta mu).
+Staged, reproducible MATLAB pipeline for studying KL/JS divergence between stochastic output distributions at two nearby enzyme input states (E0, E1), versus deterministic energy dissipation (phi) and chemical driving (delta mu).
 
 **Important:** E0/E1 are currently defined by **total enzyme concentration**, not substrate S. See [docs/RESULT_INTERPRETATION.md](docs/RESULT_INTERPRETATION.md).
+
+## Status / headline conclusion
+
+The original "KL saturates at ~34" result was a **numerical artifact** (histogram KL + epsilon smoothing). The refactor + `paper_inspired_dimensionless` mode + JS/log-KL metrics + symmetric rate ranges + log-spaced enzyme sweep **remove that artifact**. However, the corrected enzyme model **does not show a strong monotonic paper-like energy/discrimination trend**, and log-spacing the sweep did not fix that. The remaining mismatch is most likely **conceptual** (model choice, input definition, or metric definition), not numerical.
+
+See [docs/HANDOFF.md](docs/HANDOFF.md) for the deliverable summary and [docs/MODEL_AUDIT.md](docs/MODEL_AUDIT.md) for the full audit and the open questions for the researcher/supervisor.
 
 ## Quick start
 
@@ -33,6 +39,26 @@ run('scripts/run_first_result_pipeline.m')
 Bounded settings: 500 deterministic screens, 50 stratified SSA rows, `N_stoch=50`, `t_end_stoch=25`, `nBins=10`. Expect **~30–90 minutes** depending on hardware.
 
 Outputs: `results/first_result/`, `figures/first_result/`, `results/first_result/summary.md`.
+
+## Paper-inspired dimensionless mode (recommended for interpretation)
+
+Same enzyme ODE/SSA model, but dimensionless and paper-inspired: `ATP=1`, `RT=1`
+(phi/delta_mu in kBT-like units), symmetric log-uniform rate ranges 10^-2..10^2,
+`E0=0.95*E*`, `E1=1.05*E*`, bounded SSA. The **headline metric is JS divergence**
+(bounded), not raw KL.
+
+```bash
+# linear enzyme sweep (~1 min)
+matlab -batch "run('scripts/run_dimensionless_first_result_pipeline.m')"
+
+# log-spaced enzyme sweep — cleaner E* definition, researcher-facing (~1 min)
+matlab -batch "run('scripts/run_dimensionless_logspacing_first_result_pipeline.m')"
+```
+
+Outputs land under `results/dimensionless_first_result/`,
+`results/dimensionless_logspacing_first_result/`, and the matching `figures/`
+dirs. The main figure is `fig_JS_vs_phi.png`; `fig_example_response_curves.png`
+shows the deterministic response and the E0/E\*/E1 operating points.
 
 ## Repository layout
 

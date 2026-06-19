@@ -1,10 +1,85 @@
 # Result interpretation guide
 
+## Two analysis modes
+
+The pipeline runs in one of two explicit modes (see `model_constants.m` and
+`docs/MODEL_AUDIT.md`):
+
+- **`legacy`** — exactly Ishfaq's original Overallfinding3 setup (SI-scale
+  concentrations, ATP = 1e-3, R·T from R = 8.314, T = 300, asymmetric
+  log-uniform rate ranges, E0 = 0.9·E*, E1 = 1.1·E*). Preserved unchanged for
+  comparison. Run with `scripts/run_smoke_pipeline.m` /
+  `scripts/run_first_result_pipeline.m`.
+- **`paper_inspired_dimensionless`** — the *same enzyme ODE/SSA model*, but
+  dimensionless and paper-inspired: ATP = 1, R·T = 1 (so phi and delta_mu are
+  reported in **kBT-like units**), symmetric log-uniform rate ranges
+  10^-2..10^2, E0 = 0.95·E*, E1 = 1.05·E*. Run with
+  `scripts/run_dimensionless_smoke_pipeline.m` /
+  `scripts/run_dimensionless_first_result_pipeline.m`.
+
+**This is an enzyme-model analogy, not the PNAS transcriptional Markov model.**
+The paper derives an analytic information-rate / decision metric on a gene-locus
+Markov chain. This code instead measures the distinguishability of the enzyme
+model's stochastic *output distributions*. The dimensionless mode borrows the
+paper's spirit (dimensionless units, symmetric ranges, small ±5% input
+separation, bounded metrics) without reimplementing its math.
+
+The enzyme sweep used to define E* can be **linear** (default) or **log-spaced**
+(`enzyme_spacing='log'`, run via
+`scripts/run_dimensionless_logspacing_first_result_pipeline.m`). Log spacing
+resolves E* better (see `fig_example_response_curves.png`) and is the
+researcher-facing variant.
+
+**Bottom line (see [HANDOFF.md](HANDOFF.md) and [MODEL_AUDIT.md](MODEL_AUDIT.md)
+section 7):** the numerical artifacts are fixed, but the corrected model does not
+show a strong monotonic energy/discrimination trend, and that is most likely a
+conceptual (model / input / metric) issue requiring researcher confirmation —
+not a tuning problem.
+
 ## Scientific caveat (read first)
 
-**E0/E1 are currently defined by total enzyme concentration.** The code sweeps total enzyme E, finds E* at the midpoint of the deterministic output ratio P/(P+S), then sets E0 = 0.9·E* and E1 = 1.1·E*.
+**E0/E1 are defined by total enzyme concentration** in both modes. The code
+sweeps total enzyme E, finds E* at the midpoint of the deterministic output
+ratio P/(P+S), then sets E0 = E0_frac·E* and E1 = E1_frac·E* (legacy 0.9/1.1,
+dimensionless 0.95/1.05).
 
-If the intended input signal is substrate S or influx alpha, the scientific definition should be changed before final interpretation.
+If the intended input signal is substrate S or influx alpha, the scientific
+definition should be changed before final interpretation.
+
+## Dimensionless-mode columns and figures
+
+In `paper_inspired_dimensionless` mode the per-condition energy columns are
+renamed to make the units explicit:
+
+- `phi_kBT_E0`, `phi_kBT_E1`, `delta_mu_kBT_E0`, `delta_mu_kBT_E1` (kBT-like).
+- `average_phi`, `average_delta_mu` keep their names and carry the kBT values
+  (they are the stratification / plotting keys in both modes).
+- `mode_setting` and `energy_units` record the mode on every row.
+
+The SSA stage adds bounded / compressed metrics alongside the raw KL columns:
+
+- `symmetric_KL` — 0.5·(KL_E0_E1 + KL_E1_E0); raw, can saturate.
+- `log1p_symmetric_KL` — log(1 + symmetric_KL); compresses the saturation tail.
+- `JS_divergence` — Jensen–Shannon (bounded 0..ln2); **the main interpretive
+  metric**, because raw KL blows up to ~-ln(epsilon) ≈ 34 when histograms do
+  not overlap, whereas JS stays bounded.
+
+Dimensionless-mode figures:
+
+| Figure | Description |
+|--------|-------------|
+| `fig_JS_vs_phi.png` | **MAIN** — JS divergence vs average phi (kBT) |
+| `fig_JS_vs_delta_mu.png` | JS divergence vs average delta mu (kBT) |
+| `fig_log1p_symmetric_KL_vs_phi.png` | log1p(symmetric KL) vs average phi |
+| `fig_symmetric_KL_vs_average_phi.png` | raw symmetric KL (comparison only) |
+| `fig_KL_vs_phi.png`, `fig_KL_vs_delta_mu.png` | raw directional KL (continuity) |
+| `fig_example_histograms_by_energy.png` | low/medium/high E0/E1 distributions |
+| `fig_example_E0_E1_histograms.png` | single representative E0/E1 overlay |
+| `fig_validity_summary.png` | counts of valid vs invalid SSA rows |
+
+**Do not interpret raw KL near 34 as "maximum distinguishability" — it is an
+epsilon smoothing artifact.** Read JS divergence (and log1p(symmetric_KL))
+instead.
 
 ## Output files
 
@@ -57,7 +132,10 @@ Deterministic columns plus stochastic/KL results.
 
 ### `ssa_example_E0_E1_distributions.csv`
 
-Final P/(P+S) values for all SSA trajectories at E0 and E1 for the **first selected row**. Used for `fig_example_E0_E1_histograms.png`.
+Final P/(P+S) values for all SSA trajectories at E0 and E1 for one
+representative **low / medium / high** energy row (tagged by `energy_level` and
+`selection_bin`). Used for `fig_example_histograms_by_energy.png` and
+`fig_example_E0_E1_histograms.png`.
 
 ## Figures
 
@@ -83,14 +161,14 @@ Blue points = `valid_for_kl=true`. Gray = invalid (diagnostic only).
 
 ## Recommended settings (current)
 
-| Setting | Smoke | First result | Legacy (avoid) |
-|---------|-------|--------------|----------------|
-| N_runs | 50 | 500 | 10000 |
-| n_E_vals | 50 | 100 | 500 |
-| N_select | 12 | 50 (+ oversample) | all |
-| N_stoch | 50 | 50 | 200 |
-| t_end_stoch | 25 | 25 | 1500 |
-| nBins | 10 | 10 | 40 |
+| Setting | Smoke | First result | Dimensionless smoke | Dimensionless first | Legacy brute force (avoid) |
+|---------|-------|--------------|---------------------|---------------------|----------------------------|
+| N_runs | 50 | 500 | 60 | 500 | 10000 |
+| n_E_vals | 50 | 100 | 60 | 100 | 500 |
+| N_select | 12 | 50 (+ oversample) | 12 | 60 (+ oversample) | all |
+| N_stoch | 50 | 50 | 50 | 100 | 200 |
+| t_end_stoch | 25 | 25 | 25 | 25 | 1500 |
+| nBins | 10 | 10 | 10 | 10 | 40 |
 
 Increase `N_stoch` and `t_end_stoch` only after confirming SSA output distributions stabilize.
 

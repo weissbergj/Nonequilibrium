@@ -1,10 +1,17 @@
-function [value, steps, hit_max_steps, failed] = run_gillespie_ssa(Etot_molecules, Vol, alpha, k1, k2, k_3, k_1, k_2, k3, beta, ATP, t_end_stoch, max_steps, eps_val)
+function [value, steps, hit_max_steps, failed, P_final, S_final] = run_gillespie_ssa(Etot_molecules, Vol, alpha, k1, k2, k_3, k_1, k_2, k3, beta, ATP, t_end_stoch, max_steps, eps_val)
 %RUN_GILLESPIE_SSA Gillespie SSA for enzyme model (legacy Overallfinding3).
+%
+% Extra outputs P_final, S_final return the raw final product and substrate
+% molecule counts (for diagnosing whether the P/(P+S) ratio itself causes
+% boundary pile-up). Existing callers that request only the first four outputs
+% are unaffected.
 
 value = nan;
 steps = 0;
 hit_max_steps = false;
 failed = false;
+P_final = nan;
+S_final = nan;
 
 try
     alpha_mol = alpha * Vol;
@@ -48,6 +55,8 @@ try
 
     hit_max_steps = steps >= max_steps;
     value = P/(P + S + eps_val);
+    P_final = P;
+    S_final = S;
 catch
     failed = true;
 end
